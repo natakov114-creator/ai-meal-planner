@@ -7,14 +7,15 @@ import pandas as pd
 import streamlit as st
 from openai import OpenAI
 
-# =========================
+# ================================
 # OpenAI client via env/secrets (DO NOT hardcode your key)
-# =========================
-api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY", "")
-# Accept both classic and project-scoped keys
-st.write("Key loaded?", bool(api_key))
-client = OpenAI(api_key=api_key)
-# Allow choosing the model from environment or Streamlit secrets
+# ================================
+
+# Prefer Streamlit Secrets, fallback to environment variables
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+if not api_key:
+    st.error("❌ No OpenAI API key found. Please add it in St
 MODEL = os.getenv("OPENAI_MODEL") or st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
 # =========================
 # Nutrition guardrails (expand as needed)
