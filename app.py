@@ -101,43 +101,75 @@ def _first_match(text: str, words: List[str]) -> Optional[str]:
 # GPT: Generate a 1-day plan (Markdown table)
 # ================================
 def generate_meal_plan(
-    calories: int, protein: int, diet="omnivore", window="13:00-21:00",
-    preferences=None, exclusions=None, intolerances=None, condition=None
+    calories: int,
+    protein: int,
+    diet: str = "omnivore",
+    window: str = "13:00-21:00",
+    preferences: Optional[List[str]] = None,
+    exclusions: Optional[List[str]] = None,
+    intolerances: Optional[List[str]] = None,
+    condition: Optional[str] = None,
+    days: int = 1,
 ) -> str:
+    """
+    Generate a multi-day meal plan with medical conditions and intolerances considered.
+    Returns Markdown tables (one per day).
+    """
     preferences = preferences or []
     exclusions = exclusions or []
     intolerances = intolerances or []
 
+    # Build condition-specific guidance
+    condition_rules = {
+        "diabetes": "Prefer low-GI foods, whole grains, legumes, non-starchy vegetables. Avoid added sugar, fruit juice, white bread.",
+        "hypertension": "Prefer low-sodium choices. Avoid processed meats, salty sauces, instant noodles.",
+        "cholesterol": "Reduce saturated fat. Avoid fried foods and fatty meats. Prefer fish, legumes, olive oil, nuts.",
+        "ibs": "Avoid high-FODMAP foods (garlic, onion, beans, lentils, apples, pears, cauliflower, sorbitol).",
+    }
+
+    intolerance_rules = {
+        "dairy": "Strictly exclude milk, cheese, yogurt, butter, cream. Use plant-based alternatives (soy, oat, coconut).",
+        "gluten": "Exclude wheat, rye, barley, bulgur, couscous. Use gluten-free bread, rice, quinoa, or corn-based products.",
+        "sorbitol": "Avoid pears, stone fruits, sorbitol-sweetened gum/candy. Prefer apples or berries.",
+    }
+
+    # Merge chosen condition + intolerances into instructions
+    condition_text = condition_rules.get(condition, "None")
+    intolerance_texts = [intolerance_rules[i] for i in intolerances if i in intolerance_rules]
+
     prompt = f"""
-Create a one-day meal plan:
+Create a {days}-day meal plan.
+
+Daily targets:
 - Calories: ~{calories}
 - Protein: ≥{protein} g
 - Diet: {diet}
 - Eating window: {window}
 
-Adjustments:
-- Food preferences (prioritize): {", ".join(preferences) if preferences else "None"}
+Personal adjustments:
+- Preferences (prioritize): {", ".join(preferences) if preferences else "None"}
 - Exclusions (must not include): {", ".join(exclusions) if exclusions else "None"}
 - Intolerances/allergies: {", ".join(intolerances) if intolerances else "None"}
 - Medical condition: {condition if condition else "None"}
 
-For each item:
-- Respect preferences, exclusions, and intolerances.
-- If condition is diabetes: prefer low-GI whole grains, legumes, non-starchy vegetables; avoid added sugars, juice, white bread.
-- If condition is hypertension: prefer low-sodium choices; avoid processed meats and salty sauces.
-- If condition is cholesterol: reduce saturated fat; avoid fried foods; prefer fish, legumes, nuts, olive oil.
-- If item is discretionary (sweets, alcohol, deep-fried, sugary drinks), mark with ⚠️ in a "Note" column.
+Rules:
+- Respect preferences, exclusions, intolerances at all times.
+- {condition_text}
+- {" ".join(intolerance_texts) if intolerance_texts else ""}
+- If any meal/snack is discretionary (fried, sweets, alcohol, soda), mark it with ⚠️ in the "Note" column.
 
-Return ONLY a Markdown table with columns:
-| Meal | Food | Portion | Calories | Protein | Note |
+Return ONLY Markdown tables.  
+Each table should have this format:
+
+| Day | Meal | Food | Portion | Calories | Protein | Note |
 """
 
     try:
         r = client.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=700,
-            temperature=0.5
+            max_tokens=1200,
+            temperature=0.5,
         )
         return r.choices[0].message.content
     except Exception as e:
@@ -145,10 +177,6 @@ Return ONLY a Markdown table with columns:
         tb = traceback.format_exc()
         st.error(
             f"⚠️ Error generating meal plan.\n\n"
-            "Common causes:\n"
-            ". Model not available for your account (try a different model)\n"
-            ". Insufficient quota/billing (HTTP 429)\n"
-            ". Invalid/expired API key (HTTP 401)\n\n"
             f"Details: {e}"
         )
         st.caption(tb)
