@@ -139,7 +139,7 @@ Return ONLY a Markdown table with columns:
             max_tokens=700,
             temperature=0.5
         )
-        return r.choices[0].message["content"]
+        return r.choices[0].message.content
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
