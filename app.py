@@ -15,11 +15,18 @@ from openai import OpenAI
 api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 if not api_key:
-    st.error("❌ No OpenAI API key found. Please add it in St
-MODEL = os.getenv("OPENAI_MODEL") or st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
-# =========================
+    st.error("❌ No OpenAI API key found. Please add it in Streamlit Secrets.")
+    st.stop()
+
+# Initialize OpenAI client
+client = OpenAI(api_key=api_key)
+
+# Allow choosing the model from environment or Streamlit secrets
+MODEL = st.secrets.get("OPENAI_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
+
+# ================================
 # Nutrition guardrails (expand as needed)
-# =========================
+# ================================
 DISCRETIONARY_KEYWORDS = [
     "fried", "deep-fried", "battered", "donut", "pastry", "croissant",
     "chips", "fries", "ice cream", "candy", "chocolate bar", "soda",
@@ -76,7 +83,7 @@ INTOLERANCE_RULES = {
     "sorbitol": {
         "avoid": ["pear", "stone fruit skins", "sorbitol-sweetened gum", "diet candy"],
         "swaps": {"pear": "apple or berries"},
-    },
+    }
 }
 
 def _contains_any(text: str, words: List[str]) -> bool:
@@ -90,40 +97,41 @@ def _first_match(text: str, words: List[str]) -> Optional[str]:
             return w
     return None
 
-# =========================
+# ================================
 # GPT: Generate a 1-day plan (Markdown table)
-# =========================
+# ================================
 def generate_meal_plan(
     calories: int, protein: int, diet="omnivore", window="13:00-21:00",
     preferences=None, exclusions=None, intolerances=None, condition=None
 ) -> str:
-    preferences  = preferences  or []
-    exclusions   = exclusions   or []
+    preferences = preferences or []
+    exclusions = exclusions or []
     intolerances = intolerances or []
 
     prompt = f"""
-    Create a one-day meal plan:
-    - Calories: ~{calories}
-    - Protein: ≥{protein} g
-    - Diet: {diet}
-    - Eating window: {window}
+Create a one-day meal plan:
+- Calories: ~{calories}
+- Protein: ≥{protein} g
+- Diet: {diet}
+- Eating window: {window}
 
-    Adjustments:
-    - Food preferences (prioritize): {", ".join(preferences) if preferences else "None"}
-    - Exclusions (must not include): {", ".join(exclusions) if exclusions else "None"}
-    - Intolerances/allergies: {", ".join(intolerances) if intolerances else "None"}
-    - Medical condition: {condition if condition else "None"}
+Adjustments:
+- Food preferences (prioritize): {", ".join(preferences) if preferences else "None"}
+- Exclusions (must not include): {", ".join(exclusions) if exclusions else "None"}
+- Intolerances/allergies: {", ".join(intolerances) if intolerances else "None"}
+- Medical condition: {condition if condition else "None"}
 
-    For each item:
-    - Respect preferences, exclusions, and intolerances.
-    - If condition is diabetes: prefer low-GI whole grains, legumes, non-starchy vegetables; avoid added sugars, juice, white breads/rice.
-    - If condition is hypertension: prefer low-sodium choices; avoid processed meats and salty sauces.
-    - If condition is cholesterol: reduce saturated fat; avoid fried foods; prefer fish, legumes, nuts, olive oil.
-    - If item is discretionary (sweets, alcohol, deep-fried, sugary drinks), mark with ⚠️ in a "Note" column.
+For each item:
+- Respect preferences, exclusions, and intolerances.
+- If condition is diabetes: prefer low-GI whole grains, legumes, non-starchy vegetables; avoid added sugars, juice, white bread.
+- If condition is hypertension: prefer low-sodium choices; avoid processed meats and salty sauces.
+- If condition is cholesterol: reduce saturated fat; avoid fried foods; prefer fish, legumes, nuts, olive oil.
+- If item is discretionary (sweets, alcohol, deep-fried, sugary drinks), mark with ⚠️ in a "Note" column.
 
-    Return ONLY a Markdown table with columns:
-    | Meal | Food | Portion | Calories | Protein | Note |
-    """
+Return ONLY a Markdown table with columns:
+| Meal | Food | Portion | Calories | Protein | Note |
+"""
+
     try:
         r = client.chat.completions.create(
             model=MODEL,
@@ -136,16 +144,35 @@ def generate_meal_plan(
         import traceback
         tb = traceback.format_exc()
         st.error(
-            "OpenAI call failed.\n\n"
+            f"⚠️ Error generating meal plan.\n\n"
             "Common causes:\n"
-            "• Model not available for your account (try a different model)\n"
-            "• Insufficient quota/billing (HTTP 429)\n"
-            "• Invalid/expired API key (HTTP 401)\n\n"
+            ". Model not available for your account (try a different model)\n"
+            ". Insufficient quota/billing (HTTP 429)\n"
+            ". Invalid/expired API key (HTTP 401)\n\n"
             f"Details: {e}"
         )
         st.caption(tb)
         raise
 
-        st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name="Meal_Plan.pdf", mime="application/pdf")
+# ================================
+# Streamlit App UI
+# ================================
+st.title("🥗 AI Meal Planner")
 
-st.caption("Tip: add your OPENAI_API_KEY in Streamlit secrets after deploying. Review plans clinically when medical conditions are selected.")
+calories = st.number_input("Daily Calories", min_value=1000, max_value=4000, value=2000, step=50)
+protein = st.number_input("Daily Protein (g)", min_value=50, max_value=300, value=100, step=10)
+diet = st.selectbox("Diet type", ["omnivore", "vegetarian", "vegan", "pescatarian"])
+window = st.text_input("Eating window (e.g., 13:00-21:00)", value="13:00-21:00")
+
+preferences = st.text_input("Food preferences (comma separated)").split(",") if st.text_input else []
+exclusions = st.text_input("Foods to exclude (comma separated)").split(",") if st.text_input else []
+intolerances = st.multiselect("Intolerances", ["lactose", "gluten", "sorbitol"])
+condition = st.selectbox("Medical condition", ["None", "diabetes", "hypertension", "cholesterol"])
+
+if st.button("Generate Meal Plan"):
+    plan = generate_meal_plan(calories, protein, diet, window, preferences, exclusions, intolerances, condition)
+    st.markdown(plan)
+
+    # Export option
+    pdf_bytes = plan.encode("utf-8")
+    st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name="Meal_Plan.pdf", mime="application/pdf")
