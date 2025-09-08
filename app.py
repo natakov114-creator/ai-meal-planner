@@ -11,8 +11,9 @@ from openai import OpenAI
 # OpenAI client via env/secrets (DO NOT hardcode your key)
 # =========================
 api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY", "")
-if not api_key or not api_key.startswith("sk-"):
-    st.error("OPENAI_API_KEY not found. Add it to environment variables or Streamlit secrets.")
+# Accept both classic and project-scoped keys
+if not api_key or not (api_key.startswith("sk-") or api_key.startswith("sk-proj-")):
+    st.error("OPENAI_API_KEY missing/invalid. Add it in Streamlit Secrets.")
     st.stop()
 client = OpenAI(api_key=api_key)
 # Allow choosing the model from environment or Streamlit secrets
@@ -131,7 +132,7 @@ def generate_meal_plan(
             max_tokens=700,
             temperature=0.5
         )
-        return r.choices[0].message.content
+        return r.choices[0].message["content"]
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
