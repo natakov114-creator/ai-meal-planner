@@ -13,9 +13,6 @@ from openai import OpenAI
 api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY", "")
 # Accept both classic and project-scoped keys
 st.write("Key loaded?", bool(api_key))
-if not api_key or not (api_key.startswith("sk-") or api_key.startswith("sk-proj-")):
-    st.error("OPENAI_API_KEY missing/invalid. Add it in Streamlit Secrets.")
-    st.stop()
 client = OpenAI(api_key=api_key)
 # Allow choosing the model from environment or Streamlit secrets
 MODEL = os.getenv("OPENAI_MODEL") or st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
